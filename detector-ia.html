@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>ETSIIT — Detector de Inteligencia Artificial</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green: #00ff88;
+      --green-dim: #00aa55;
+      --green-dark: #003322;
+      --red: #ff3355;
+      --yellow: #ffcc00;
+      --bg: #030f07;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--green);
+      font-family: 'Share Tech Mono', monospace;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+      padding: 1.5rem;
+    }
+
+    /* Scanline overlay */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.18) 2px,
+        rgba(0,0,0,0.18) 4px
+      );
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    /* Grid background */
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(0,255,136,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,255,136,0.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+      max-width: 480px;
+      text-align: center;
+    }
+
+    /* PHASE 1 — SCAN */
+    #phase-scan { display: flex; flex-direction: column; align-items: center; gap: 1.5rem; }
+
+    .logo {
+      font-family: 'Orbitron', monospace;
+      font-weight: 900;
+      font-size: clamp(0.65rem, 2.5vw, 0.85rem);
+      letter-spacing: 0.15em;
+      color: var(--green-dim);
+      text-transform: uppercase;
+    }
+
+    .title {
+      font-family: 'Orbitron', monospace;
+      font-weight: 700;
+      font-size: clamp(1rem, 5vw, 1.5rem);
+      letter-spacing: 0.08em;
+      line-height: 1.3;
+      text-shadow: 0 0 20px var(--green);
+    }
+
+    /* Face scanner */
+    .face-wrap {
+      position: relative;
+      width: 180px;
+      height: 180px;
+      margin: 0 auto;
+    }
+
+    .face-ring {
+      position: absolute; inset: 0;
+      border: 2px solid var(--green-dim);
+      border-radius: 50%;
+      animation: ring-pulse 2s ease-in-out infinite;
+    }
+    .face-ring:nth-child(2) { inset: 12px; border-color: var(--green); animation-delay: 0.3s; }
+    .face-ring:nth-child(3) { inset: 24px; border-color: var(--green-dim); animation-delay: 0.6s; }
+
+    @keyframes ring-pulse {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+
+    .face-icon {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 5rem;
+      animation: face-flicker 3s ease-in-out infinite;
+    }
+
+    @keyframes face-flicker {
+      0%, 95%, 100% { opacity: 1; }
+      96% { opacity: 0.2; }
+      97% { opacity: 1; }
+      98% { opacity: 0.4; }
+    }
+
+    /* Scan beam */
+    .scan-beam {
+      position: absolute;
+      left: 24px; right: 24px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--green), transparent);
+      box-shadow: 0 0 12px var(--green);
+      top: 24px;
+      animation: scan-move 1.4s ease-in-out infinite;
+    }
+
+    @keyframes scan-move {
+      0% { top: 24px; opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { top: calc(100% - 24px); opacity: 0; }
+    }
+
+    /* Corner brackets */
+    .corners {
+      position: absolute; inset: 0;
+    }
+    .corners::before, .corners::after,
+    .corners span::before, .corners span::after {
+      content: '';
+      position: absolute;
+      width: 18px; height: 18px;
+      border-color: var(--green);
+      border-style: solid;
+    }
+    .corners::before  { top: 0;    left: 0;  border-width: 2px 0 0 2px; }
+    .corners::after   { top: 0;    right: 0; border-width: 2px 2px 0 0; }
+    .corners span::before { bottom: 0; left: 0;  border-width: 0 0 2px 2px; }
+    .corners span::after  { bottom: 0; right: 0; border-width: 0 2px 2px 0; }
+
+    /* Log terminal */
+    .log-box {
+      background: rgba(0,255,136,0.04);
+      border: 1px solid var(--green-dark);
+      border-radius: 4px;
+      padding: 0.8rem 1rem;
+      text-align: left;
+      font-size: clamp(0.62rem, 2.5vw, 0.75rem);
+      color: var(--green-dim);
+      min-height: 90px;
+      line-height: 1.8;
+      width: 100%;
+    }
+
+    .log-line { display: block; }
+    .log-line.active { color: var(--green); }
+    .blink { animation: blink 0.8s step-end infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    /* PHASE 2 — RESULT */
+    #phase-result { display: none; flex-direction: column; align-items: center; gap: 1.4rem; }
+
+    .result-title {
+      font-family: 'Orbitron', monospace;
+      font-weight: 900;
+      font-size: clamp(0.7rem, 3vw, 0.9rem);
+      letter-spacing: 0.2em;
+      color: var(--green-dim);
+    }
+
+    .percent-display {
+      font-family: 'Orbitron', monospace;
+      font-weight: 900;
+      font-size: clamp(4rem, 22vw, 7rem);
+      line-height: 1;
+      text-shadow: 0 0 40px currentColor, 0 0 80px currentColor;
+      animation: number-glow 2s ease-in-out infinite alternate;
+    }
+
+    @keyframes number-glow {
+      from { text-shadow: 0 0 20px currentColor, 0 0 40px currentColor; }
+      to   { text-shadow: 0 0 40px currentColor, 0 0 80px currentColor, 0 0 120px currentColor; }
+    }
+
+    .verdict-box {
+      border: 1px solid currentColor;
+      border-radius: 4px;
+      padding: 0.8rem 1.4rem;
+      font-family: 'Orbitron', monospace;
+      font-weight: 700;
+      font-size: clamp(0.75rem, 3.5vw, 1rem);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      animation: verdict-appear 0.5s ease-out;
+    }
+
+    @keyframes verdict-appear {
+      from { opacity: 0; transform: scale(0.8); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+
+    .sub-text {
+      font-size: clamp(0.65rem, 2.8vw, 0.8rem);
+      color: var(--green-dim);
+      line-height: 1.6;
+      max-width: 340px;
+    }
+
+    .badge {
+      font-size: clamp(0.55rem, 2vw, 0.65rem);
+      color: rgba(0,255,136,0.3);
+      letter-spacing: 0.12em;
+      margin-top: 0.5rem;
+    }
+
+    /* Progress bar */
+    .bar-wrap {
+      width: 100%;
+      height: 6px;
+      background: var(--green-dark);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: currentColor;
+      width: 0%;
+      transition: width 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 0 8px currentColor;
+    }
+
+    /* Glitch on result reveal */
+    .glitch {
+      animation: glitch 0.3s steps(1) forwards;
+    }
+    @keyframes glitch {
+      0%  { transform: translate(3px, 0) skewX(2deg); }
+      20% { transform: translate(-3px, 1px) skewX(-1deg); }
+      40% { transform: translate(2px, -1px); }
+      60% { transform: translate(-1px, 2px); }
+      80% { transform: translate(1px, 0) skewX(1deg); }
+      100%{ transform: translate(0,0); }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- FASE 1: ESCANEANDO -->
+  <div id="phase-scan">
+    <div class="logo">ETSIIT · Dpto. de Ing. Telemática e Informática</div>
+    <div class="title">DETECTOR DE<br>INTELIGENCIA ARTIFICIAL</div>
+
+    <div class="face-wrap">
+      <div class="face-ring"></div>
+      <div class="face-ring"></div>
+      <div class="face-ring"></div>
+      <div class="corners"><span></span></div>
+      <div class="face-icon">🧑</div>
+      <div class="scan-beam"></div>
+    </div>
+
+    <div class="log-box" id="log"></div>
+  </div>
+
+  <!-- FASE 2: RESULTADO -->
+  <div id="phase-result">
+    <div class="logo">ETSIIT · Dpto. de Ing. Telemática e Informática</div>
+    <div class="result-title">ANÁLISIS COMPLETADO</div>
+
+    <div class="percent-display" id="percent-num"></div>
+
+    <div style="width:100%; color: var(--green)">
+      <div class="bar-wrap"><div class="bar-fill" id="bar"></div></div>
+    </div>
+
+    <div class="verdict-box" id="verdict-box"></div>
+    <div class="sub-text" id="sub-text"></div>
+    <div class="badge">ETSIIT AI SCANNER v4.2.1 · RESULTADO CERTIFICADO</div>
+  </div>
+
+</div>
+
+<script>
+  // Fullscreen automático al tocar
+  document.body.addEventListener('click', () => {
+    const el = document.documentElement;
+    if (el.requestFullscreen) el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  }, { once: true });
+
+  // Porcentajes posibles
+  const opciones = [
+    { val: 5,    label: '5%',    color: '#00ff88' },
+    { val: 33,   label: '33%',   color: '#00ff88' },
+    { val: 43,   label: '43%',   color: '#ffcc00' },
+    { val: 67,   label: '67%',   color: '#ffcc00' },
+    { val: 69,   label: '69%',   color: '#ff9900' },  // nice
+    { val: 83,   label: '83%',   color: '#ff5500' },
+    { val: 99.9, label: '99.9%', color: '#ff3355' },
+  ];
+
+  const elegido = opciones[Math.floor(Math.random() * opciones.length)];
+
+  // Mensajes del log
+  const logs = [
+    '> Iniciando escáner biométrico...',
+    '> Conectando con servidor central...',
+    '> Analizando patrones de comportamiento...',
+    '> Detectando anomalías cognitivas...',
+    '> Midiendo nivel de humanidad...',
+    '> Ejecutando test de Turing inverso...',
+    '> Calculando índice de artificialidad...',
+    '> ANÁLISIS COMPLETADO.',
+  ];
+
+  const logEl = document.getElementById('log');
+  let i = 0;
+
+  function addLog() {
+    if (i < logs.length) {
+      const span = document.createElement('span');
+      span.className = 'log-line' + (i === logs.length - 1 ? ' active' : '');
+      span.textContent = logs[i];
+      logEl.appendChild(span);
+      i++;
+      if (i < logs.length) {
+        setTimeout(addLog, 600 + Math.random() * 400);
+      } else {
+        setTimeout(showResult, 900);
+      }
+    }
+  }
+
+  setTimeout(addLog, 600);
+
+  // Mensajes según porcentaje
+  function getVerdict(val) {
+    if (val <= 5)   return { text: '🟢 HUMANO CONFIRMADO',       sub: 'Enhorabuena, pareces bastante humano. Eso es bueno?' };
+    if (val <= 33)  return { text: '🟢 PROBABLEMENTE HUMANO',    sub: 'Hay señales de vida orgánica. Aunque... si hombre, 33 🏎️​ "Me repites ese numerín?"' };
+    if (val <= 43)  return { text: '🟡 RESULTADO AMBIGUO',       sub: 'El 43% de tu comportamiento presenta patrones no humanos. Recomendamos observación.' };
+    if (val <= 67)  return { text: '🟡 SOSPECHOSO',              sub: 'Más de la mitad de tus respuestas cognitivas son indistinguibles de una IA. <br> Es recomendable revisión humana.' };
+    if (val <= 69)  return { text: '🟠 ALTAMENTE SOSPECHOSO',    sub: 'Un 69% de IA detectado. Coincidencia? Los ingenier@s dicen que no 🤓.' };
+    if (val <= 83)  return { text: '🔴 POSIBLE IA DETECTADA',    sub: 'Podrías ser un modelo de lenguaje. Preguntate a ti mism@, ¿tienes recuerdos de infancia?' };
+    return           { text: '🚨 IA CONFIRMADA',                 sub: 'Has fallado el test de Turing. Has fallado el análisis biométrico. El Departamento ha sido notificado con tus datos personales para revisión en profundidad.' };
+  }
+
+  function showResult() {
+    document.getElementById('phase-scan').style.display = 'none';
+    const phase = document.getElementById('phase-result');
+    phase.style.display = 'flex';
+
+    const numEl   = document.getElementById('percent-num');
+    const barEl   = document.getElementById('bar');
+    const verdEl  = document.getElementById('verdict-box');
+    const subEl   = document.getElementById('sub-text');
+
+    const { text, sub } = getVerdict(elegido.val);
+
+    // Color dinámico
+    numEl.style.color  = elegido.color;
+    barEl.style.background = elegido.color;
+    barEl.style.boxShadow = `0 0 8px ${elegido.color}`;
+    verdEl.style.color = elegido.color;
+    verdEl.style.borderColor = elegido.color;
+
+    // Animación del número contando
+    let current = 0;
+    const target = elegido.val;
+    const duration = 1800;
+    const start = performance.now();
+
+    function tick(now) {
+      const t = Math.min((now - start) / duration, 1);
+      const eased = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+      current = eased * target;
+      numEl.textContent = target === 99.9
+        ? (current >= 99.9 ? '99.9%' : current.toFixed(1) + '%')
+        : Math.round(current) + '%';
+      if (t < 1) requestAnimationFrame(tick);
+      else {
+        numEl.textContent = elegido.label;
+        numEl.classList.add('glitch');
+        setTimeout(() => {
+          verdEl.textContent = text;
+          subEl.textContent  = sub;
+        }, 200);
+      }
+    }
+    requestAnimationFrame(tick);
+
+    // Barra de progreso
+    requestAnimationFrame(() => {
+      barEl.style.width = Math.min(elegido.val, 100) + '%';
+    });
+  }
+</script>
+</body>
+</html>
