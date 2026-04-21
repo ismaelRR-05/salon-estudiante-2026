@@ -163,6 +163,9 @@
     letter-spacing: 0.1em;
     line-height: 1.2;
   }
+  /* Disable glitch pseudo-elements on the title — they look broken on mobile */
+  .etsiit-title.glitch::before,
+  .etsiit-title.glitch::after { display: none; }
   .etsiit-sub {
     font-family: 'Share Tech Mono', monospace;
     font-size: clamp(0.65rem, 1.5vw, 0.8rem);
@@ -350,13 +353,23 @@
 
   /* ── INFO SCREEN ── */
   #screen-info {
-    gap: 1.5rem;
+    overflow-y: auto;
+    overflow-x: hidden;
+    justify-content: flex-start;
+    align-items: center;
+    padding: 0;
+    -webkit-overflow-scrolling: touch;
+  }
+  #screen-info-inner {
+    display: flex;
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: stretch;
     justify-content: center;
-    flex-wrap: wrap;
-    padding: 1.5rem 2rem;
+    gap: 1.5rem;
+    width: 100%;
     max-width: 1200px;
+    padding: 1.5rem 1.2rem 6rem;
     margin: 0 auto;
   }
 
@@ -666,6 +679,7 @@
 
 <!-- ═══════════════ INFO ═══════════════ -->
 <div class="screen" id="screen-info">
+<div id="screen-info-inner">
   <div class="info-header">
     <h2>// CARRERAS EN LA ETSIIT · UNIVERSIDAD DE GRANADA //</h2>
   </div>
@@ -731,9 +745,10 @@
       </a>
     </div>
   </div>
-</div>
+</div><!-- /screen-info-inner -->
+</div><!-- /screen-info -->
 
-<button class="btn-reset" id="btn-reset" onclick="resetAll()">[ ↺ NUEVO ESCANEO ]</button>
+<button id="btn-reset" onclick="resetAll()">[ ↺ NUEVO ESCANEO ]</button>
 
 <script>
 // ═══════════════════════════════════════════════════════
