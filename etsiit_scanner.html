@@ -26,28 +26,7 @@
     overflow: hidden;
     height: 100vh;
     width: 100vw;
-    cursor: none;
-  }
 
-  /* Custom cursor */
-  #cursor {
-    position: fixed;
-    width: 20px; height: 20px;
-    border: 2px solid var(--green);
-    border-radius: 50%;
-    pointer-events: none;
-    z-index: 9999;
-    transform: translate(-50%,-50%);
-    transition: transform 0.1s, border-color 0.3s;
-    box-shadow: 0 0 8px var(--green);
-  }
-  #cursor::after {
-    content: '';
-    position: absolute;
-    inset: 3px;
-    background: var(--green);
-    border-radius: 50%;
-    opacity: 0.5;
   }
 
   /* Matrix canvas */
@@ -555,7 +534,7 @@
 <body>
 
 <canvas id="matrix-canvas"></canvas>
-<div id="cursor"></div>
+
 
 <!-- ═══════════════ BOOT ═══════════════ -->
 <div class="screen active" id="screen-boot">
