@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ETSIIT · Escáner de Vocación</title>
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green: #00ff41;
+    --green-dim: #00aa2a;
+    --green-glow: #00ff4166;
+    --teal: #00ffcc;
+    --blue: #0af;
+    --orange: #ff8c00;
+    --bg: #000;
+    --panel: rgba(0,20,5,0.85);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--green);
+    font-family: 'Share Tech Mono', monospace;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    cursor: none;
+  }
+
+  /* Custom cursor */
+  #cursor {
+    position: fixed;
+    width: 20px; height: 20px;
+    border: 2px solid var(--green);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9999;
+    transform: translate(-50%,-50%);
+    transition: transform 0.1s, border-color 0.3s;
+    box-shadow: 0 0 8px var(--green);
+  }
+  #cursor::after {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    background: var(--green);
+    border-radius: 50%;
+    opacity: 0.5;
+  }
+
+  /* Matrix canvas */
+  #matrix-canvas {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    opacity: 0.35;
+  }
+
+  /* Scanlines overlay */
+  body::after {
+    content:'';
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 3px,
+      rgba(0,0,0,0.15) 3px,
+      rgba(0,0,0,0.15) 4px
+    );
+    pointer-events: none;
+  }
+
+  /* Vignette */
+  body::before {
+    content:'';
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.75) 100%);
+    pointer-events: none;
+  }
+
+  /* ── SCREENS ── */
+  .screen {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.6s ease;
+  }
+  .screen.active {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  /* ── BOOT SCREEN ── */
+  #screen-boot {
+    font-family: 'VT323', monospace;
+    font-size: clamp(1rem, 2.5vw, 1.3rem);
+    color: var(--green-dim);
+    align-items: flex-start;
+    justify-content: flex-end;
+    padding: 3rem;
+  }
+  #boot-log { max-width: 700px; }
+  #boot-log .line {
+    opacity: 0;
+    display: block;
+    line-height: 1.8;
+    animation: fadeLine 0.1s forwards;
+  }
+  .line .ok  { color: var(--teal); }
+  .line .err { color: #f33; }
+  #boot-progress {
+    margin-top: 1rem;
+    width: 300px;
+    height: 4px;
+    background: #111;
+    border: 1px solid var(--green-dim);
+  }
+  #boot-bar {
+    height: 100%;
+    background: var(--green);
+    width: 0%;
+    box-shadow: 0 0 10px var(--green);
+    transition: width 0.05s linear;
+  }
+
+  /* ── SCAN SCREEN ── */
+  #screen-scan {
+    gap: 2.5rem;
+    text-align: center;
+  }
+  .etsiit-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .etsiit-badge {
+    font-family: 'VT323', monospace;
+    font-size: clamp(0.7rem, 1.5vw, 0.9rem);
+    letter-spacing: 0.3em;
+    color: var(--green-dim);
+    text-transform: uppercase;
+  }
+  .etsiit-title {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: clamp(1.4rem, 4vw, 2.2rem);
+    font-weight: 700;
+    color: var(--green);
+    text-shadow: 0 0 20px var(--green-glow);
+    letter-spacing: 0.1em;
+    line-height: 1.2;
+  }
+  .etsiit-sub {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: clamp(0.65rem, 1.5vw, 0.8rem);
+    color: var(--green-dim);
+    letter-spacing: 0.2em;
+  }
+
+  .oracle-text {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: clamp(1rem, 2.5vw, 1.35rem);
+    font-weight: 600;
+    color: var(--teal);
+    letter-spacing: 0.08em;
+    text-shadow: 0 0 12px rgba(0,255,204,0.5);
+    max-width: 600px;
+    line-height: 1.5;
+  }
+
+  /* Hand zone */
+  #hand-zone {
+    position: relative;
+    width: clamp(160px, 30vw, 220px);
+    height: clamp(160px, 30vw, 220px);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #hand-zone:hover #hand-svg { filter: drop-shadow(0 0 18px var(--teal)); }
+  #hand-ring {
+    position: absolute;
+    inset: -20px;
+    border-radius: 50%;
+    border: 2px solid var(--green-dim);
+    animation: pulse-ring 2s ease-in-out infinite;
+  }
+  #hand-ring2 {
+    position: absolute;
+    inset: -38px;
+    border-radius: 50%;
+    border: 1px solid var(--green-dim);
+    opacity: 0.4;
+    animation: pulse-ring 2s ease-in-out 0.7s infinite;
+  }
+  #hand-svg {
+    width: 100%;
+    height: 100%;
+    transition: filter 0.3s;
+    filter: drop-shadow(0 0 10px var(--green));
+  }
+  #hand-label {
+    font-family: 'VT323', monospace;
+    font-size: clamp(0.9rem, 2.5vw, 1.1rem);
+    color: var(--green-dim);
+    letter-spacing: 0.25em;
+    animation: blink 1.2s step-end infinite;
+  }
+
+  /* ── SCANNING SCREEN ── */
+  #screen-scanning { gap: 2rem; text-align: center; }
+
+  #scan-container {
+    position: relative;
+    width: clamp(180px, 35vw, 260px);
+    height: clamp(180px, 35vw, 260px);
+  }
+  #scan-hand-svg {
+    width: 100%;
+    height: 100%;
+    filter: drop-shadow(0 0 25px var(--teal));
+    animation: scan-pulse 0.5s ease-in-out infinite alternate;
+  }
+  #scan-line {
+    position: absolute;
+    left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(to right, transparent, var(--teal), transparent);
+    box-shadow: 0 0 15px var(--teal), 0 0 30px var(--teal);
+    top: 0;
+    animation: scan-sweep 1.5s linear infinite;
+  }
+  .em-ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 2px solid var(--teal);
+    top: 50%; left: 50%;
+    transform: translate(-50%,-50%) scale(0);
+    opacity: 0;
+    animation: em-expand 2s ease-out infinite;
+  }
+  .em-ring:nth-child(2) { animation-delay: 0.5s; }
+  .em-ring:nth-child(3) { animation-delay: 1s; }
+  .em-ring:nth-child(4) { animation-delay: 1.5s; }
+
+  #scan-status {
+    font-family: 'VT323', monospace;
+    font-size: clamp(1.1rem, 3vw, 1.6rem);
+    color: var(--teal);
+    text-shadow: 0 0 10px rgba(0,255,204,0.5);
+    letter-spacing: 0.2em;
+    min-height: 2em;
+  }
+  #scan-bar-wrap {
+    width: clamp(200px, 50vw, 400px);
+    background: #0a1a0a;
+    border: 1px solid var(--green-dim);
+    height: 8px;
+    position: relative;
+    overflow: hidden;
+  }
+  #scan-bar {
+    height: 100%;
+    background: linear-gradient(to right, var(--green), var(--teal));
+    box-shadow: 0 0 12px var(--teal);
+    width: 0%;
+    transition: width 0.1s linear;
+  }
+  #scan-pct {
+    font-family: 'VT323', monospace;
+    font-size: 1rem;
+    color: var(--green-dim);
+    letter-spacing: 0.15em;
+  }
+  .scan-data {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: clamp(0.55rem, 1.4vw, 0.7rem);
+    color: var(--green-dim);
+    opacity: 0;
+    letter-spacing: 0.1em;
+    transition: opacity 0.4s;
+    line-height: 1.7;
+    text-align: left;
+  }
+  .scan-data.visible { opacity: 1; }
+
+  /* ── REVEAL SCREEN ── */
+  #screen-reveal {
+    gap: 1.5rem;
+    text-align: center;
+  }
+  #reveal-pre {
+    font-family: 'VT323', monospace;
+    font-size: clamp(0.9rem, 2.5vw, 1.2rem);
+    color: var(--green-dim);
+    letter-spacing: 0.25em;
+    animation: flicker 3s ease-in-out infinite;
+  }
+  #reveal-main {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+    font-size: clamp(2.5rem, 9vw, 6rem);
+    letter-spacing: 0.05em;
+    line-height: 1;
+    text-shadow: 0 0 40px currentColor, 0 0 80px currentColor;
+    opacity: 0;
+    transform: scale(0.5);
+    transition: opacity 0.8s ease, transform 0.8s cubic-bezier(0.175,0.885,0.32,1.275);
+  }
+  #reveal-main.show { opacity: 1; transform: scale(1); }
+  #reveal-main.teleco { color: var(--teal); }
+  #reveal-main.info   { color: var(--orange); text-shadow: 0 0 40px var(--orange), 0 0 80px var(--orange); }
+
+  #reveal-sub {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: clamp(1rem, 3vw, 1.6rem);
+    font-weight: 600;
+    color: white;
+    opacity: 0;
+    letter-spacing: 0.06em;
+    transition: opacity 0.6s ease 0.4s;
+  }
+  #reveal-sub.show { opacity: 1; }
+
+  .particles-container {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 5;
+    overflow: hidden;
+  }
+  .particle {
+    position: absolute;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    animation: particle-fly 1.5s ease-out forwards;
+  }
+
+  /* ── INFO SCREEN ── */
+  #screen-info {
+    gap: 1.5rem;
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: center;
+    flex-wrap: wrap;
+    padding: 1.5rem 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .info-header {
+    width: 100%;
+    text-align: center;
+    margin-bottom: 0.5rem;
+  }
+  .info-header h2 {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: clamp(1rem, 3vw, 1.6rem);
+    font-weight: 700;
+    color: var(--green);
+    letter-spacing: 0.15em;
+    text-shadow: 0 0 20px var(--green-glow);
+  }
+
+  .career-card {
+    flex: 1;
+    min-width: clamp(200px, 30vw, 280px);
+    max-width: 340px;
+    background: var(--panel);
+    border: 1px solid var(--green-dim);
+    padding: 1.4rem 1.6rem;
+    position: relative;
+    clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
+    transition: border-color 0.3s, box-shadow 0.3s;
+    cursor: default;
+  }
+  .career-card:hover {
+    border-color: var(--teal);
+    box-shadow: 0 0 30px rgba(0,255,204,0.15), inset 0 0 30px rgba(0,255,204,0.03);
+  }
+  .career-card.highlighted {
+    border-color: var(--teal);
+    box-shadow: 0 0 25px rgba(0,255,204,0.2), inset 0 0 20px rgba(0,255,204,0.04);
+  }
+  .career-card.highlighted.info-card {
+    border-color: var(--orange);
+    box-shadow: 0 0 25px rgba(255,140,0,0.2), inset 0 0 20px rgba(255,140,0,0.04);
+  }
+  .card-corner {
+    position: absolute;
+    top: 0; right: 0;
+    width: 20px; height: 20px;
+    background: var(--green-dim);
+    clip-path: polygon(0 0, 100% 0, 100% 100%);
+  }
+  .career-card.highlighted .card-corner { background: var(--teal); }
+  .career-card.highlighted.info-card .card-corner { background: var(--orange); }
+
+  .card-label {
+    font-family: 'VT323', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.3em;
+    color: var(--green-dim);
+    margin-bottom: 0.4rem;
+  }
+  .card-title {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+    font-size: clamp(1rem, 2.5vw, 1.3rem);
+    color: white;
+    margin-bottom: 0.8rem;
+    line-height: 1.2;
+  }
+  .career-card.highlighted .card-title { color: var(--teal); }
+  .career-card.highlighted.info-card .card-title { color: var(--orange); }
+
+  .card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 0.9rem;
+  }
+  .tag {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: clamp(0.5rem, 1.2vw, 0.6rem);
+    padding: 2px 8px;
+    border: 1px solid var(--green-dim);
+    color: var(--green-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .career-card.highlighted .tag { border-color: var(--teal); color: var(--teal); }
+  .career-card.highlighted.info-card .tag { border-color: var(--orange); color: var(--orange); }
+
+  .card-desc {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: clamp(0.6rem, 1.3vw, 0.68rem);
+    color: #7a9a7a;
+    line-height: 1.7;
+  }
+
+  .btn-reset {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    z-index: 50;
+    font-family: 'VT323', monospace;
+    font-size: 1rem;
+    letter-spacing: 0.2em;
+    color: var(--green-dim);
+    border: 1px solid var(--green-dim);
+    background: rgba(0,20,5,0.8);
+    padding: 0.4rem 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: none;
+  }
+  .btn-reset:hover { color: var(--green); border-color: var(--green); box-shadow: 0 0 10px var(--green-glow); }
+  .btn-reset.visible { display: block; }
+
+  /* ── GLITCH ── */
+  .glitch {
+    position: relative;
+  }
+  .glitch::before,
+  .glitch::after {
+    content: attr(data-text);
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    overflow: hidden;
+  }
+  .glitch::before {
+    color: var(--teal);
+    clip-path: polygon(0 0, 100% 0, 100% 40%, 0 40%);
+    transform: translateX(-3px);
+    animation: glitch1 3s infinite linear;
+  }
+  .glitch::after {
+    color: #f0f;
+    clip-path: polygon(0 60%, 100% 60%, 100% 100%, 0 100%);
+    transform: translateX(3px);
+    animation: glitch2 3s infinite linear;
+  }
+
+  /* ── ANIMATIONS ── */
+  @keyframes fadeLine { to { opacity: 1; } }
+  @keyframes pulse-ring {
+    0%, 100% { transform: scale(1); opacity: 0.6; }
+    50% { transform: scale(1.06); opacity: 1; }
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  @keyframes scan-sweep {
+    0% { top: 5%; }
+    50% { top: 90%; }
+    100% { top: 5%; }
+  }
+  @keyframes scan-pulse {
+    from { filter: drop-shadow(0 0 15px var(--teal)); }
+    to   { filter: drop-shadow(0 0 35px var(--teal)); }
+  }
+  @keyframes em-expand {
+    0%   { width: 20px; height: 20px; opacity: 0.8; }
+    100% { width: 400px; height: 400px; opacity: 0; }
+  }
+  @keyframes particle-fly {
+    0%   { transform: translate(0,0) scale(1); opacity: 1; }
+    100% { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; }
+  }
+  @keyframes flicker {
+    0%,100% { opacity: 1; }
+    92% { opacity: 1; }
+    93% { opacity: 0.3; }
+    94% { opacity: 1; }
+    96% { opacity: 0.5; }
+    97% { opacity: 1; }
+  }
+  @keyframes glitch1 {
+    0%,90%,100% { transform: translateX(0); clip-path: polygon(0 0,100% 0,100% 40%,0 40%); }
+    92% { transform: translateX(-5px); clip-path: polygon(0 20%,100% 20%,100% 60%,0 60%); }
+    95% { transform: translateX(5px); }
+  }
+  @keyframes glitch2 {
+    0%,90%,100% { transform: translateX(0); clip-path: polygon(0 60%,100% 60%,100% 100%,0 100%); }
+    93% { transform: translateX(5px); clip-path: polygon(0 40%,100% 40%,100% 80%,0 80%); }
+    96% { transform: translateX(-5px); }
+  }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Screen-info animated entry */
+  .career-card {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  .career-card.revealed {
+    animation: fadeInUp 0.5s ease forwards;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="matrix-canvas"></canvas>
+<div id="cursor"></div>
+
+<!-- ═══════════════ BOOT ═══════════════ -->
+<div class="screen active" id="screen-boot">
+  <div id="boot-log"></div>
+  <div id="boot-progress" style="margin-top:1rem;width:300px;height:4px;background:#111;border:1px solid #00aa2a;">
+    <div id="boot-bar"></div>
+  </div>
+</div>
+
+<!-- ═══════════════ SCAN ═══════════════ -->
+<div class="screen" id="screen-scan">
+  <div class="etsiit-header">
+    <span class="etsiit-badge">Universidad de Granada · ETSIIT</span>
+    <h1 class="etsiit-title glitch" data-text="ESCUELA TÉC. SUP. DE ING.<br>INFORMÁTICA Y TELECOMUNICACIÓN">
+      ESCUELA TÉC. SUP. DE ING.<br>INFORMÁTICA Y TELECOMUNICACIÓN
+    </h1>
+    <span class="etsiit-sub">// SISTEMA DE DIAGNÓSTICO DE VOCACIÓN v2.4 //</span>
+  </div>
+
+  <p class="oracle-text">
+    Mediante inducción electromagnética y el análisis de tus patrones biométricos,<br>
+    este sistema determinará si tienes <strong style="color:var(--green)">madera de INGENIERO</strong>.
+  </p>
+
+  <div id="hand-zone">
+    <div id="hand-ring"></div>
+    <div id="hand-ring2"></div>
+    <svg id="hand-svg" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- Palm base -->
+      <path d="M55 130 Q50 170 60 185 Q80 200 120 200 Q160 200 155 170 L150 130" fill="none" stroke="#00ff41" stroke-width="2.5"/>
+      <!-- Thumb -->
+      <path d="M55 130 Q45 110 48 90 Q52 72 65 75 Q75 78 72 100 L70 130" fill="none" stroke="#00ff41" stroke-width="2.5"/>
+      <!-- Index -->
+      <path d="M70 130 L68 75 Q70 58 82 58 Q94 58 94 75 L94 130" fill="none" stroke="#00ff41" stroke-width="2.5"/>
+      <!-- Middle -->
+      <path d="M94 130 L94 68 Q96 50 108 50 Q120 50 120 68 L120 130" fill="none" stroke="#00ff41" stroke-width="2.5"/>
+      <!-- Ring -->
+      <path d="M120 130 L120 75 Q122 58 133 60 Q144 62 142 78 L140 130" fill="none" stroke="#00ff41" stroke-width="2.5"/>
+      <!-- Pinky -->
+      <path d="M140 130 L140 90 Q142 76 150 78 Q158 80 156 96 L155 130" fill="none" stroke="#00ff41" stroke-width="2.5"/>
+      <!-- Electromagnetic lines -->
+      <line x1="80" y1="150" x2="130" y2="150" stroke="#00ff41" stroke-width="0.8" stroke-dasharray="4 4" opacity="0.4"/>
+      <line x1="75" y1="162" x2="135" y2="162" stroke="#00ff41" stroke-width="0.8" stroke-dasharray="4 4" opacity="0.3"/>
+      <line x1="72" y1="174" x2="138" y2="174" stroke="#00ff41" stroke-width="0.8" stroke-dasharray="4 4" opacity="0.2"/>
+      <!-- Center dot -->
+      <circle cx="105" cy="155" r="4" fill="none" stroke="#00ffcc" stroke-width="1.5" opacity="0.8"/>
+      <circle cx="105" cy="155" r="1.5" fill="#00ffcc"/>
+    </svg>
+  </div>
+
+  <span id="hand-label">[ PULSA PARA INICIAR ESCANEO ]</span>
+</div>
+
+<!-- ═══════════════ SCANNING ═══════════════ -->
+<div class="screen" id="screen-scanning">
+  <div id="scan-container">
+    <div class="em-ring" style="width:100px;height:100px;"></div>
+    <div class="em-ring" style="width:100px;height:100px;"></div>
+    <div class="em-ring" style="width:100px;height:100px;"></div>
+    <div class="em-ring" style="width:100px;height:100px;"></div>
+    <div id="scan-line"></div>
+    <svg id="scan-hand-svg" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M55 130 Q50 170 60 185 Q80 200 120 200 Q160 200 155 170 L150 130" fill="rgba(0,255,204,0.05)" stroke="#00ffcc" stroke-width="2.5"/>
+      <path d="M55 130 Q45 110 48 90 Q52 72 65 75 Q75 78 72 100 L70 130" fill="rgba(0,255,204,0.05)" stroke="#00ffcc" stroke-width="2.5"/>
+      <path d="M70 130 L68 75 Q70 58 82 58 Q94 58 94 75 L94 130" fill="rgba(0,255,204,0.05)" stroke="#00ffcc" stroke-width="2.5"/>
+      <path d="M94 130 L94 68 Q96 50 108 50 Q120 50 120 68 L120 130" fill="rgba(0,255,204,0.05)" stroke="#00ffcc" stroke-width="2.5"/>
+      <path d="M120 130 L120 75 Q122 58 133 60 Q144 62 142 78 L140 130" fill="rgba(0,255,204,0.05)" stroke="#00ffcc" stroke-width="2.5"/>
+      <path d="M140 130 L140 90 Q142 76 150 78 Q158 80 156 96 L155 130" fill="rgba(0,255,204,0.05)" stroke="#00ffcc" stroke-width="2.5"/>
+      <circle cx="105" cy="155" r="4" fill="none" stroke="#00ffcc" stroke-width="1.5"/>
+      <circle cx="105" cy="155" r="1.5" fill="#00ffcc"/>
+    </svg>
+  </div>
+
+  <div id="scan-status">INICIANDO SENSORES...</div>
+
+  <div id="scan-bar-wrap">
+    <div id="scan-bar"></div>
+  </div>
+  <div id="scan-pct">0%</div>
+
+  <div class="scan-data" id="scan-data-1">
+    &gt; SENSOR_EM_ACTIVE ... lectura de campo magnético<br>
+    &gt; FREQ_ANALYSIS ... δ:0.3Hz θ:4.2Hz α:8.7Hz β:13.1Hz γ:30+Hz
+  </div>
+  <div class="scan-data" id="scan-data-2">
+    &gt; NEURAL_PATTERN ... procesando arquitectura cognitiva<br>
+    &gt; LOGIC_INDEX ... evaluando capacidad de abstracción [██░░░░]
+  </div>
+  <div class="scan-data" id="scan-data-3">
+    &gt; VOCATIONAL_MAP ... cruzando con base de datos ETSIIT<br>
+    &gt; MATCH_ENGINE ... calculando afinidad de carrera...
+  </div>
+</div>
+
+<!-- ═══════════════ REVEAL ═══════════════ -->
+<div class="screen" id="screen-reveal">
+  <div id="reveal-pre">// DIAGNÓSTICO COMPLETADO · RESULTADO //</div>
+  <div style="font-family:'Rajdhani',sans-serif;font-size:clamp(0.9rem,2vw,1.1rem);color:#7a9a7a;letter-spacing:0.15em;">
+    LOS SENSORES INDICAN QUE TIENES MADERA DE...
+  </div>
+  <div id="reveal-main">???</div>
+  <div id="reveal-sub">¡La decisión es tuya!</div>
+  <div style="font-family:'VT323',monospace;font-size:clamp(0.8rem,2vw,1rem);color:var(--green-dim);letter-spacing:0.2em;margin-top:0.5rem;animation:flicker 3s infinite;">
+    [ PULSA PARA VER LAS CARRERAS ]
+  </div>
+  <div id="particles-container" class="particles-container"></div>
+</div>
+
+<!-- ═══════════════ INFO ═══════════════ -->
+<div class="screen" id="screen-info">
+  <div class="info-header">
+    <h2>// CARRERAS EN LA ETSIIT · UNIVERSIDAD DE GRANADA //</h2>
+  </div>
+
+  <div class="career-card" id="card-info">
+    <div class="card-corner"></div>
+    <div class="card-label">» GRADO «</div>
+    <div class="card-title">Ingeniería<br>Informática</div>
+    <div class="card-tags">
+      <span class="tag">IA &amp; ML</span>
+      <span class="tag">Software</span>
+      <span class="tag">Ciberseguridad</span>
+      <span class="tag">Sistemas</span>
+    </div>
+    <div class="card-desc">
+      Diseña, crea y optimiza software y sistemas. Desde inteligencia artificial hasta videojuegos,
+      pasando por ciberseguridad y computación en la nube. Si tu mente piensa en algoritmos, este es tu camino.
+    </div>
+  </div>
+
+  <div class="career-card" id="card-teleco">
+    <div class="card-corner"></div>
+    <div class="card-label">» GRADO «</div>
+    <div class="card-title">Ingeniería de<br>Telecomunicación</div>
+    <div class="card-tags">
+      <span class="tag">5G / 6G</span>
+      <span class="tag">Redes</span>
+      <span class="tag">Antenas</span>
+      <span class="tag">Electrónica</span>
+    </div>
+    <div class="card-desc">
+      Conecta el mundo: redes móviles, satélites, fibra óptica, protocolos, señales e Internet de las Cosas.
+      Si el universo invisible de las ondas electromagnéticas o las reglas que siguen las comunicaciones te fascinan, teleco es lo tuyo.
+    </div>
+  </div>
+
+  <div class="career-card" id="card-doble">
+    <div class="card-corner"></div>
+    <div class="card-label">» GRADO «</div>
+    <div class="card-title"> Ciencia de datos e<br>Inteligencia Artificial</div>
+    <div class="card-tags">
+      <span class="tag">Novedad</span>
+      <span class="tag"></span>
+      <span class="tag">5.5 años</span>
+    </div>
+    <div class="card-desc">
+      Vivimos en la era de los datos, pero los datos sin análisis son solo ruido. En esta carrera te convertirás en el intérprete que extrae valor del caos. Aprenderás a entrenar máquinas para que "piensen", predigan comportamientos y tomen decisiones inteligentes de forma autónoma.
+    </div>
+  </div>
+
+  <div class="career-card" id="card-master" style="min-width:100%;max-width:100%;clip-path:polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));">
+    <div class="card-corner"></div>
+    <div class="card-label">» TAMBIÉN EN LA ETSIIT «</div>
+    <div class="card-title" style="font-size:clamp(0.9rem,2vw,1.1rem);">
+      Doble grado en Ingeniería Informática + ADE &nbsp;·&nbsp; Doble grado en Ingeniería Informática + Matemáticas &nbsp;·&nbsp; Máster en Ingeniería Informática &nbsp;·&nbsp; Máster en Ciencia de Datos &nbsp;·&nbsp; Doctorado
+    </div>
+    <div class="card-desc" style="margin-top:0.5rem;">
+      La ETSIIT ofrece un ecosistema completo de formación técnica de élite. Laboratorios de última generación, convenios con empresas tecnológicas y una comunidad de más de 3.000 estudiantes en Granada.
+      &nbsp;<strong style="color:var(--green)">etsiit.ugr.es</strong>
+    </div>
+  </div>
+</div>
+
+<button class="btn-reset" id="btn-reset" onclick="resetAll()">[ ↺ NUEVO ESCANEO ]</button>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  MATRIX RAIN
+// ═══════════════════════════════════════════════════════
+const canvas = document.getElementById('matrix-canvas');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+const fontSize = 16;
+let columns = Math.floor(canvas.width / fontSize);
+let drops = Array.from({length: columns}, () => Math.random() * -100);
+
+function drawMatrix() {
+  ctx.fillStyle = 'rgba(0,0,0,0.05)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.font = fontSize + 'px VT323';
+  const chars = '01';
+
+  for (let i = 0; i < drops.length; i++) {
+    const char = chars[Math.floor(Math.random() * chars.length)];
+    const bright = Math.random() > 0.95;
+    ctx.fillStyle = bright ? '#ffffff' : (Math.random() > 0.7 ? '#00ff41' : '#00aa2a');
+    if (bright) ctx.shadowBlur = 10, ctx.shadowColor = '#00ff41';
+    else ctx.shadowBlur = 0;
+    ctx.fillText(char, i * fontSize, drops[i] * fontSize);
+    if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
+    drops[i] += 0.5;
+  }
+}
+setInterval(drawMatrix, 50);
+
+// ═══════════════════════════════════════════════════════
+//  CUSTOM CURSOR
+// ═══════════════════════════════════════════════════════
+const cursor = document.getElementById('cursor');
+document.addEventListener('mousemove', e => {
+  cursor.style.left = e.clientX + 'px';
+  cursor.style.top  = e.clientY + 'px';
+});
+
+// ═══════════════════════════════════════════════════════
+//  SCREEN MANAGER
+// ═══════════════════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// ═══════════════════════════════════════════════════════
+//  BOOT SEQUENCE
+// ═══════════════════════════════════════════════════════
+const bootLines = [
+  { text: 'ETSIIT VOCATIONAL SCANNER v2.4.1 · ETSIIT · UGR', delay: 0 },
+  { text: 'Inicializando sensores de inducción electromagnética... <span class="ok">[OK]</span>', delay: 300 },
+  { text: 'Cargando base de datos biométrica ETSIIT 2024-25... <span class="ok">[OK]</span>', delay: 600 },
+  { text: 'Módulo de análisis de patrones cognitivos... <span class="ok">[OK]</span>', delay: 900 },
+  { text: 'Calibrando detector de vocaciones ingenieriles... <span class="ok">[OK]</span>', delay: 1200 },
+  { text: 'Conectando con servidor ETSIIT Granada... <span class="ok">[CONECTADO]</span>', delay: 1600 },
+  { text: 'SISTEMA LISTO. Bienvenido/a al diagnóstico de carrera.', delay: 2000 },
+];
+
+const bootLog = document.getElementById('boot-log');
+const bootBar = document.getElementById('boot-bar');
+
+bootLines.forEach((line, i) => {
+  setTimeout(() => {
+    const span = document.createElement('span');
+    span.className = 'line';
+    span.innerHTML = '&gt; ' + line.text;
+    bootLog.appendChild(span);
+    bootBar.style.width = ((i + 1) / bootLines.length * 100) + '%';
+  }, line.delay);
+});
+
+setTimeout(() => {
+  showScreen('screen-scan');
+}, 3000);
+
+// ═══════════════════════════════════════════════════════
+//  SCAN INTERACTION
+// ═══════════════════════════════════════════════════════
+let scanResult = null;
+
+document.getElementById('hand-zone').addEventListener('click', startScan);
+document.getElementById('hand-zone').addEventListener('touchstart', e => { e.preventDefault(); startScan(); });
+
+function startScan() {
+  scanResult = Math.random() > 0.5 ? 'teleco' : 'info';
+  showScreen('screen-scanning');
+  runScanAnimation();
+}
+
+function runScanAnimation() {
+  const statusEl = document.getElementById('scan-status');
+  const barEl = document.getElementById('scan-bar');
+  const pctEl = document.getElementById('scan-pct');
+
+  const steps = [
+    { pct: 15, status: 'DETECTANDO CAMPO EM...', delay: 0 },
+    { pct: 30, status: 'LEYENDO PATRONES DÉRMICOS...', delay: 600 },
+    { pct: 55, status: 'ANALIZANDO ARQUITECTURA NEURAL...', delay: 1400,
+      dataId: 'scan-data-1' },
+    { pct: 72, status: 'PROCESANDO PERFIL COGNITIVO...', delay: 2400,
+      dataId: 'scan-data-2' },
+    { pct: 90, status: 'CRUZANDO CON BASE ETSIIT...', delay: 3400,
+      dataId: 'scan-data-3' },
+    { pct: 100, status: 'DIAGNÓSTICO COMPLETADO.', delay: 4600 },
+  ];
+
+  steps.forEach(step => {
+    setTimeout(() => {
+      barEl.style.width = step.pct + '%';
+      pctEl.textContent = step.pct + '%';
+      statusEl.textContent = step.status;
+      if (step.dataId) {
+        document.getElementById(step.dataId).classList.add('visible');
+      }
+    }, step.delay);
+  });
+
+  setTimeout(() => {
+    showReveal();
+  }, 5400);
+}
+
+// ═══════════════════════════════════════════════════════
+//  REVEAL
+// ═══════════════════════════════════════════════════════
+function showReveal() {
+  showScreen('screen-reveal');
+  const mainEl = document.getElementById('reveal-main');
+  const subEl  = document.getElementById('reveal-sub');
+
+  const isTeleco = scanResult === 'teleco';
+  mainEl.className = isTeleco ? 'glitch teleco' : 'glitch info';
+  const label = isTeleco ? 'TELECOMUNICACIÓN' : 'INFORMÁTICA';
+  mainEl.textContent = label;
+  mainEl.dataset.text = label;
+
+  setTimeout(() => { mainEl.classList.add('show'); }, 300);
+  setTimeout(() => { subEl.classList.add('show'); spawnParticles(isTeleco); }, 800);
+
+  // Click to go to info
+  document.getElementById('screen-reveal').addEventListener('click', showInfo, { once: true });
+}
+
+function spawnParticles(teal) {
+  const container = document.getElementById('particles-container');
+  container.innerHTML = '';
+  const color = teal ? '#00ffcc' : '#ff8c00';
+  const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+  for (let i = 0; i < 60; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    const angle = Math.random() * Math.PI * 2;
+    const dist  = 100 + Math.random() * 400;
+    p.style.cssText = `
+      background: ${color};
+      box-shadow: 0 0 6px ${color};
+      left: ${cx}px; top: ${cy}px;
+      --dx: ${Math.cos(angle) * dist}px;
+      --dy: ${Math.sin(angle) * dist}px;
+      animation-delay: ${Math.random() * 0.3}s;
+      animation-duration: ${0.8 + Math.random() * 0.8}s;
+    `;
+    container.appendChild(p);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  INFO
+// ═══════════════════════════════════════════════════════
+function showInfo() {
+  showScreen('screen-info');
+  document.getElementById('btn-reset').classList.add('visible');
+
+  const isTeleco = scanResult === 'teleco';
+  const highlighted = isTeleco ? 'card-teleco' : 'card-info';
+  const highlightedEl = document.getElementById(highlighted);
+  highlightedEl.classList.add('highlighted');
+  if (!isTeleco) highlightedEl.classList.add('info-card');
+
+  const cards = ['card-info', 'card-teleco', 'card-doble', 'card-master'];
+  // Put highlighted first
+  const sorted = [highlighted, ...cards.filter(c => c !== highlighted)];
+
+  sorted.forEach((id, i) => {
+    setTimeout(() => {
+      const el = document.getElementById(id);
+      el.style.animationDelay = '0s';
+      el.classList.add('revealed');
+    }, i * 150 + 200);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  RESET
+// ═══════════════════════════════════════════════════════
+function resetAll() {
+  document.getElementById('btn-reset').classList.remove('visible');
+  // Reset scan data
+  ['scan-data-1','scan-data-2','scan-data-3'].forEach(id =>
+    document.getElementById(id).classList.remove('visible'));
+  document.getElementById('scan-bar').style.width = '0%';
+  document.getElementById('scan-pct').textContent = '0%';
+  document.getElementById('reveal-main').classList.remove('show');
+  document.getElementById('reveal-sub').classList.remove('show');
+  // Reset cards
+  ['card-info','card-teleco','card-doble','card-master'].forEach(id => {
+    const el = document.getElementById(id);
+    el.classList.remove('revealed','highlighted','info-card');
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(30px)';
+  });
+  showScreen('screen-scan');
+  // Re-attach reveal click listener
+  document.getElementById('screen-reveal').addEventListener('click', showInfo, { once: true });
+}
+</script>
+</body>
+</html>
