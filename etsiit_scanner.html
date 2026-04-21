@@ -26,6 +26,28 @@
     overflow: hidden;
     height: 100vh;
     width: 100vw;
+    cursor: none;
+  }
+
+  /* Custom cursor */
+  #cursor {
+    position: fixed;
+    width: 20px; height: 20px;
+    border: 2px solid var(--green);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9999;
+    transform: translate(-50%,-50%);
+    transition: transform 0.1s, border-color 0.3s;
+    box-shadow: 0 0 8px var(--green);
+  }
+  #cursor::after {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    background: var(--green);
+    border-radius: 50%;
+    opacity: 0.5;
   }
 
   /* Matrix canvas */
@@ -533,6 +555,7 @@
 <body>
 
 <canvas id="matrix-canvas"></canvas>
+<div id="cursor"></div>
 
 <!-- ═══════════════ BOOT ═══════════════ -->
 <div class="screen active" id="screen-boot">
@@ -546,7 +569,7 @@
 <div class="screen" id="screen-scan">
   <div class="etsiit-header">
     <span class="etsiit-badge">Universidad de Granada · ETSIIT</span>
-    <h1 class="etsiit-title glitch" data-text="ESCUELA TÉCNICA SUPERIOR DE ING. INFORMÁTICA Y TELECOMUNICACIÓN">
+    <h1 class="etsiit-title">
       ESCUELA TÉCNICA SUPERIOR DE ING.<br>INFORMÁTICA Y TELECOMUNICACIÓN
     </h1>
     <span class="etsiit-sub">// SISTEMA DE DIAGNÓSTICO DE VOCACIÓN v1.0 //</span>
@@ -749,6 +772,15 @@ function drawMatrix() {
   }
 }
 setInterval(drawMatrix, 50);
+
+// ═══════════════════════════════════════════════════════
+//  CUSTOM CURSOR
+// ═══════════════════════════════════════════════════════
+const cursor = document.getElementById('cursor');
+document.addEventListener('mousemove', e => {
+  cursor.style.left = e.clientX + 'px';
+  cursor.style.top  = e.clientY + 'px';
+});
 
 // ═══════════════════════════════════════════════════════
 //  SCREEN MANAGER
