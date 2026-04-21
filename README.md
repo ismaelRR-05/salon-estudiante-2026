@@ -1,5 +1,5 @@
 # Webs interactivas para salón del estudiante, en representación a la ETSITT UGR durante el curso 2025-2026
-- detector-ia.html (https://ismaelrr-05.github.io/salon-estudiante-2026/etsiit_scanner.html)
+- detector-ia.html (https://ismaelrr-05.github.io/salon-estudiante-2026/detector-ia.html)
   - Al abrirse, empieza a cargar y establece un resultado aleatorio del porcentaje de IA que detecta en el usuario. Cada porcentaje incluye una frase y según el grado de intensidad pasa de verde (menor porcertaje de IA) hasta rojo (mayor porcentaje de IA)
  
 - etsiit_scanner.html (https://ismaelrr-05.github.io/salon-estudiante-2026/etsiit_scanner.html)
