@@ -26,7 +26,6 @@
     overflow: hidden;
     height: 100vh;
     width: 100vw;
-
   }
 
   /* Matrix canvas */
@@ -329,14 +328,23 @@
 
   /* ── INFO SCREEN ── */
   #screen-info {
-    gap: 1.5rem;
+    justify-content: flex-start;
+    align-items: center;
+    padding: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  #screen-info-inner {
+    display: flex;
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: stretch;
     justify-content: center;
-    flex-wrap: wrap;
-    padding: 1.5rem 2rem;
+    gap: 1.5rem;
+    width: 100%;
     max-width: 1200px;
-    margin: 0 auto;
+    padding: 1.5rem 1.2rem 6rem;
   }
 
   .info-header {
@@ -535,7 +543,6 @@
 
 <canvas id="matrix-canvas"></canvas>
 
-
 <!-- ═══════════════ BOOT ═══════════════ -->
 <div class="screen active" id="screen-boot">
   <div id="boot-log"></div>
@@ -645,6 +652,7 @@
 
 <!-- ═══════════════ INFO ═══════════════ -->
 <div class="screen" id="screen-info">
+<div id="screen-info-inner">
   <div class="info-header">
     <h2>// CARRERAS EN LA ETSIIT · UNIVERSIDAD DE GRANADA //</h2>
   </div>
@@ -711,6 +719,7 @@
     </div>
   </div>
 </div>
+</div><!-- /screen-info-inner -->
 
 <button class="btn-reset" id="btn-reset" onclick="resetAll()">[ ↺ NUEVO ESCANEO ]</button>
 
@@ -751,15 +760,6 @@ function drawMatrix() {
   }
 }
 setInterval(drawMatrix, 50);
-
-// ═══════════════════════════════════════════════════════
-//  CUSTOM CURSOR
-// ═══════════════════════════════════════════════════════
-const cursor = document.getElementById('cursor');
-document.addEventListener('mousemove', e => {
-  cursor.style.left = e.clientX + 'px';
-  cursor.style.top  = e.clientY + 'px';
-});
 
 // ═══════════════════════════════════════════════════════
 //  SCREEN MANAGER
@@ -895,6 +895,7 @@ function spawnParticles(teal) {
 // ═══════════════════════════════════════════════════════
 function showInfo() {
   showScreen('screen-info');
+  document.getElementById('screen-info').scrollTop = 0;
   document.getElementById('btn-reset').classList.add('visible');
 
   const isTeleco = scanResult === 'teleco';
